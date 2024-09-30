@@ -393,7 +393,7 @@ class Ext4Parser:
             'bg_reserved2'               : 0, 
             'bg_reserved3'               : 0, 
                  }
-        
+        self.maxinode=0
         self.ext4_inode = {
             'i_mode'                     : EXT4_INODE_MODE['S_IXOTH'],
             'i_uid'                      : 0,  
@@ -564,6 +564,7 @@ class Ext4Parser:
         print(f"Total Block Groups: {count_of_bg}")
         # exit()
         og_offset=offset
+        self.maxinode=self.ext4_superblock['sb_inodes_count']
         for i in range(count_of_bg):
             print(f"\n\nParsing Block Group {i}:\n\n")
             self.parse_ext4_block_group_descriptor(og_offset)
@@ -918,7 +919,10 @@ class Ext4Parser:
         inode_count = self.ext4_superblock['sb_inodes_per_group']
         for i in range(inode_count):
             # print(f"\n\nParsing Inode {i}:\n\n")
-            # if i==525749:
+            # if i==784898:
+                # exit()
+            # print(f"\n\nParsing Inode {(group_num*self.ext4_superblock['sb_inodes_per_group'])+i}:\n\n")
+            # if (group_num*self.ext4_superblock['sb_inodes_per_group'])+i ==784897:
             #     exit()
             self.parse_ext4_inode(offset+(i*inode_size),i, group_num)
             inodeoffset=offset+(i*inode_size)
@@ -933,7 +937,8 @@ class Ext4Parser:
             self.parse_ext4_extenttree(offset+(i*inode_size)+0x28)
             print("\n-----End of Extent Tree-----\n")
             extoffset=offset+((i*inode_size)+0x28)
-            if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
+            # print(self.ext4_inode['i_flags'])
+            if ((self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'])&1) == 1:
                 self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[extoffset+0x00:extoffset+0x02], byteorder='little')
                 self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[extoffset+0x02:extoffset+0x04], byteorder='little')
                 self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[extoffset+0x04:extoffset+0x06], byteorder='little')
@@ -1136,93 +1141,104 @@ class Ext4Parser:
                 self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[extoffset+0x04:extoffset+0x06], byteorder='little')
                 self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[extoffset+0x06:extoffset+0x08], byteorder='little')
                 self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[extoffset+0x08:extoffset+0x0C], byteorder='little')
+                # print("well")
                 if self.ext4_extent_header_copy['eh_magic']==0xF30A and self.ext4_extent_header_copy['eh_depth']==0:
-                    self.ext4_parse_direntry(extoffset+0x0C)
+                    # print("depth1")
+                    for i in range(self.ext4_extent_header_copy['eh_entries']):
+                        self.ext4_parse_direntry(extoffset+(0x0C*(i+1)))
                     # if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
                     #     continue
                 elif self.ext4_extent_header_copy['eh_magic']==0xF30A and self.ext4_extent_header_copy['eh_depth']==1:
-                    self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[extoffset+0x0C:extoffset+0x10], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[extoffset+0x10:extoffset+0x14], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[extoffset+0x14:extoffset+0x16], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[extoffset+0x16:extoffset+0x18], byteorder='little')
-                    extoffset=extoffset+0x18
-                    new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
-                    self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
-                    self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
-                    self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
-                    self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
-                    self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
-                    new_offset=new_offset+0x0C
-                    self.ext4_parse_direntry(new_offset)
+                    for ent in range(self.ext4_extent_header_copy['eh_entries']):
+                        extoffset=extoffset+(0x0C*ent)
+                        self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[extoffset+0x0C:extoffset+0x10], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[extoffset+0x10:extoffset+0x14], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[extoffset+0x14:extoffset+0x16], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[extoffset+0x16:extoffset+0x18], byteorder='little')
+                        new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
+                        self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
+                        self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
+                        self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
+                        self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
+                        self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
+                        new_offset1=new_offset+0x0C
+                        for i in range(self.ext4_extent_header_copy['eh_entries']):
+                            self.ext4_parse_direntry(new_offset1+(0x0C*i))
                     # if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
                     #     continue
                 elif self.ext4_extent_header_copy['eh_magic']==0xF30A and self.ext4_extent_header_copy['eh_depth']==2:
-                    self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[extoffset+0x0C:extoffset+0x10], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[extoffset+0x10:extoffset+0x14], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[extoffset+0x14:extoffset+0x16], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[extoffset+0x16:extoffset+0x18], byteorder='little')
-                    extoffset=extoffset+0x18
-                    new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
-                    self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
-                    self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
-                    self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
-                    self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
-                    self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
-                    new_offset=new_offset+0x0C
-                    self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[new_offset+0x0C:new_offset+0x10], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[new_offset+0x10:new_offset+0x14], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[new_offset+0x14:new_offset+0x16], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[new_offset+0x16:new_offset+0x18], byteorder='little')
-                    new_offset=new_offset+0x18
-                    new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
-                    self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
-                    self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
-                    self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
-                    self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
-                    self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
-                    new_offset=new_offset+0x0C
-                    self.ext4_parse_direntry(new_offset)
-                    # if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
-                    #     continue
+                    for ent in range(self.ext4_extent_header_copy['eh_entries']):
+                        extoffset=extoffset+(0x0C*ent)
+                        self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[extoffset+0x0C:extoffset+0x10], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[extoffset+0x10:extoffset+0x14], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[extoffset+0x14:extoffset+0x16], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[extoffset+0x16:extoffset+0x18], byteorder='little')
+                        new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
+                        self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
+                        self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
+                        self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
+                        self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
+                        self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
+                        for ent1 in range(self.ext4_extent_header_copy['eh_entries']):
+                            new_offset=new_offset+(0x0C*ent1)
+                            self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[new_offset+0x0C:new_offset+0x10], byteorder='little')
+                            self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[new_offset+0x10:new_offset+0x14], byteorder='little')
+                            self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[new_offset+0x14:new_offset+0x16], byteorder='little')
+                            self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[new_offset+0x16:new_offset+0x18], byteorder='little')
+                            new_offset1=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
+                            self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset1+0x00:new_offset1+0x02], byteorder='little')
+                            self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset1+0x02:new_offset1+0x04], byteorder='little')
+                            self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset1+0x04:new_offset1+0x06], byteorder='little')
+                            self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset1+0x06:new_offset1+0x08], byteorder='little')
+                            self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset1+0x08:new_offset1+0x0C], byteorder='little')
+                            new_offset2=new_offset1+0x0C
+                            for ent2 in range(self.ext4_extent_header_copy['eh_entries']):
+                                self.ext4_parse_direntry(new_offset2*ent2)
+                            # if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
+                            #     continue
                 elif self.ext4_extent_header_copy['eh_magic']==0xF30A and self.ext4_extent_header_copy['eh_depth']==3:
-                    self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[extoffset+0x0C:extoffset+0x10], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[extoffset+0x10:extoffset+0x14], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[extoffset+0x14:extoffset+0x16], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[extoffset+0x16:extoffset+0x18], byteorder='little')
-                    extoffset=extoffset+0x18
-                    new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
-                    self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
-                    self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
-                    self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
-                    self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
-                    self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
-                    new_offset=new_offset+0x0C
-                    self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[new_offset+0x0C:new_offset+0x10], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[new_offset+0x10:new_offset+0x14], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[new_offset+0x14:new_offset+0x16], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[new_offset+0x16:new_offset+0x18], byteorder='little')
-                    new_offset=new_offset+0x18
-                    new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
-                    self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
-                    self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
-                    self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
-                    self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
-                    self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
-                    new_offset=new_offset+0x0C
-                    self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[new_offset+0x0C:new_offset+0x10], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[new_offset+0x10:new_offset+0x14], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[new_offset+0x14:new_offset+0x16], byteorder='little')
-                    self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[new_offset+0x16:new_offset+0x18], byteorder='little')
-                    new_offset=new_offset+0x18
-                    new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
-                    self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
-                    self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
-                    self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
-                    self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
-                    self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
-                    new_offset=new_offset+0x0C
-                    self.ext4_parse_direntry(new_offset)
+                    for ent in range(self.ext4_extent_header_copy['eh_entries']):
+                        extoffset=extoffset+(0x0C*ent)
+                        self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[extoffset+0x0C:extoffset+0x10], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[extoffset+0x10:extoffset+0x14], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[extoffset+0x14:extoffset+0x16], byteorder='little')
+                        self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[extoffset+0x16:extoffset+0x18], byteorder='little')
+                        new_offset=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
+                        self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset+0x00:new_offset+0x02], byteorder='little')
+                        self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset+0x02:new_offset+0x04], byteorder='little')
+                        self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset+0x04:new_offset+0x06], byteorder='little')
+                        self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset+0x06:new_offset+0x08], byteorder='little')
+                        self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset+0x08:new_offset+0x0C], byteorder='little')
+                        for ent1 in range(self.ext4_extent_header_copy['eh_entries']):
+                            new_offset=new_offset+(0x0C*ent1)
+                            self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[new_offset+0x0C:new_offset+0x10], byteorder='little')
+                            self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[new_offset+0x10:new_offset+0x14], byteorder='little')
+                            self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[new_offset+0x14:new_offset+0x16], byteorder='little')
+                            self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[new_offset+0x16:new_offset+0x18], byteorder='little')
+                            new_offset1=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
+                            self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset1+0x00:new_offset1+0x02], byteorder='little')
+                            self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset1+0x02:new_offset1+0x04], byteorder='little')
+                            self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset1+0x04:new_offset1+0x06], byteorder='little')
+                            self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset1+0x06:new_offset1+0x08], byteorder='little')
+                            self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset1+0x08:new_offset1+0x0C], byteorder='little')
+                            new_offset2=new_offset1+0x0C
+                            for ent2 in range(self.ext4_extent_header_copy['eh_entries']):
+                                new_offset2=new_offset2+(0x0C*ent2)
+                                self.ext4_extent_idx_copy['ei_block'] = int.from_bytes(self.f[new_offset2+0x0C:new_offset2+0x10], byteorder='little')
+                                self.ext4_extent_idx_copy['ei_leaf_lo'] = int.from_bytes(self.f[new_offset2+0x10:new_offset2+0x14], byteorder='little')
+                                self.ext4_extent_idx_copy['ei_leaf_hi'] = int.from_bytes(self.f[new_offset2+0x14:new_offset2+0x16], byteorder='little')
+                                self.ext4_extent_idx_copy['ei_unused'] = int.from_bytes(self.f[new_offset2+0x16:new_offset2+0x18], byteorder='little')
+                                new_offset3=self.ext4_extent_idx_copy['ei_leaf_lo']*4096
+                                self.ext4_extent_header_copy['eh_magic'] = int.from_bytes(self.f[new_offset3+0x00:new_offset3+0x02], byteorder='little')
+                                self.ext4_extent_header_copy['eh_entries'] = int.from_bytes(self.f[new_offset3+0x02:new_offset3+0x04], byteorder='little')
+                                self.ext4_extent_header_copy['eh_max'] = int.from_bytes(self.f[new_offset3+0x04:new_offset3+0x06], byteorder='little')
+                                self.ext4_extent_header_copy['eh_depth'] = int.from_bytes(self.f[new_offset3+0x06:new_offset3+0x08], byteorder='little')
+                                self.ext4_extent_header_copy['eh_generation'] = int.from_bytes(self.f[new_offset3+0x08:new_offset3+0x0C], byteorder='little')
+                                new_offset3=new_offset3+0x0C
+                                for ent3 in range(self.ext4_extent_header_copy['eh_entries']):
+                                    self.ext4_parse_direntry(new_offset3*ent3)
                     # if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
+                    
                     #     continue
                                 
                 # self.ext4_parse_dir(offset+(i*inode_size))
@@ -1727,32 +1743,121 @@ class Ext4Parser:
         except:
             name = self.f[offset+0x10:offset+0x30].hex()
             print(f"Name: {name}")
-        
+    
+    #old parser code       
+    # def ext4_parse_direntry(self,inodeoffset):
+    #     # print("Reached")
+    #     offset=inodeoffset
+    #     self.ext4_extent_copy['ee_block'] = int.from_bytes(self.f[offset:offset+0x04], byteorder='little')
+    #     self.ext4_extent_copy['ee_len'] = int.from_bytes(self.f[offset+0x04:offset+0x06], byteorder='little')
+    #     self.ext4_extent_copy['ee_start_hi'] = int.from_bytes(self.f[offset+0x06:offset+0x08], byteorder='little')
+    #     self.ext4_extent_copy['ee_start_lo'] = int.from_bytes(self.f[offset+0x08:offset+0x0C], byteorder='little')
+    #     print(self.ext4_extent_copy['ee_len'])
+    #     offset=self.ext4_extent_copy['ee_start_lo']*4096
+    #     dir_sz = self.ext4_extent_copy['ee_len'] * 4096
+    #     print("\ndirectory size is",dir_sz,"\n")
+    #     if dir_sz==0: 
+    #         return
+    #     i=0
+    #     while i < dir_sz:
+    #         dirent_sz=self.ext4_parse_direntry_internal(offset)
+    #         if self.ext4_dir_entry_2['inode'] == 0 and self.ext4_dir_entry_2['rec_len'] > 263:
+    #             offset=offset+4
+    #             continue
+    #         if self.ext4_dir_entry_2['name_len'] == 0 and self.ext4_dir_entry_2['inode'] != 0:
+    #             offset=offset+0x08
+    #             continue
+    #         if self.ext4_dir_entry_2['rec_len'] > 263 and self.ext4_dir_entry_2['name']!="..":
+    #             offset=offset+0x08
+    #             continue
+    #         if dirent_sz==0:
+    #             break
+                
+    #         if(self.ext4_inode['i_mode'] & 0xF000) == 0x4000:
+    #             if (self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] )&1 == 1:
+    #                 if self.dx_root['dot_inode'] != 0:
+    #                     pass
+    #                     # print("---------------------hashtree---------------------------")
+    #                     # exit()
+    #             else:
+    #                 if self.ext4_dir_entry_2['inode'] != 0:
+    #                     self.ext4_parse_linear_dir_entry_info(offset)
+    #                     offset=offset+dirent_sz
+    #         i=i+dirent_sz
+     
     def ext4_parse_direntry(self,inodeoffset):
+    
+        # print("Reached")
         offset=inodeoffset
         self.ext4_extent_copy['ee_block'] = int.from_bytes(self.f[offset:offset+0x04], byteorder='little')
         self.ext4_extent_copy['ee_len'] = int.from_bytes(self.f[offset+0x04:offset+0x06], byteorder='little')
         self.ext4_extent_copy['ee_start_hi'] = int.from_bytes(self.f[offset+0x06:offset+0x08], byteorder='little')
         self.ext4_extent_copy['ee_start_lo'] = int.from_bytes(self.f[offset+0x08:offset+0x0C], byteorder='little')
+        # print(self.ext4_extent_copy['ee_len'])
         offset=self.ext4_extent_copy['ee_start_lo']*4096
         dir_sz = self.ext4_extent_copy['ee_len'] * 4096
+        # print("\ndirectory size is",dir_sz,"\n")
         if dir_sz==0: 
             return
         i=0
         while i < dir_sz:
+            # print(f"i is {i}")
             dirent_sz=self.ext4_parse_direntry_internal(offset)
-            if dirent_sz==0:
+            # print(f"Directory Entry Size: {dirent_sz}")
+            # print(f"\n{hex(offset)}")
+            if int.from_bytes(self.f[offset:offset+0x13], byteorder='little')==0:
                 break
-            if(self.ext4_inode['i_mode'] & 0xF000) == 0x4000:
-                if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0:
-                    if self.dx_root['dot_inode'] != 0:
-                        pass
-                        # print("---------------------hashtree---------------------------")
-                        # exit()
-                else:
-                    if self.ext4_dir_entry_2['inode'] != 0:
-                        offset=self.ext4_parse_linear_dir_entry_info(offset)
-            i=i+dirent_sz
+            if self.ext4_dir_entry_2['name_len']==2 and self.ext4_dir_entry_2['name']=="..":
+                print(f"Inode: {self.ext4_dir_entry_2['inode']}")
+                print(f"Record Length: {self.ext4_dir_entry_2['rec_len']}")
+                print(f"Name Length: {self.ext4_dir_entry_2['name_len']}")
+                print(f"File Type: {self.ext4_dir_entry_2['file_type']}")
+                print(f"Name: {self.ext4_dir_entry_2['name']}")
+                offset=offset+8
+                i=i+8
+                continue
+            if self.ext4_dir_entry_2['inode'] == 0 and self.ext4_dir_entry_2['rec_len'] > 263 and self.ext4_dir_entry_2['name_len']==0:
+                offset=offset+4
+                i=i+4
+                continue
+            # if self.ext4_dir_entry_2['inode'] == 0 and self.ext4_dir_entry_2['rec_len'] ==0 and self.ext4_dir_entry_2['name_len']==0 and self.ext4_dir_entry_2['file_type']==0:
+            #     offset=offset+0x04
+            #     i=i+0x04
+            #     continue
+            if self.ext4_dir_entry_2['inode'] > self.maxinode and self.ext4_dir_entry_2['rec_len'] ==0 and self.ext4_dir_entry_2['name_len']==0:
+                offset=offset+4
+                i=i+4
+                continue 
+            if self.ext4_dir_entry_2['inode'] == 0 and self.ext4_dir_entry_2['rec_len'] ==12 and self.ext4_dir_entry_2['name_len']==0:
+                offset=offset+0x0c
+                i=i+0x0c
+                continue
+            if self.ext4_dir_entry_2['rec_len'] > 263 and self.ext4_dir_entry_2['inode'] < self.ext4_superblock['sb_first_ino'] and self.ext4_dir_entry_2['inode']>0:
+                offset=offset+0x08
+                i=i+0x08
+                continue
+            if self.ext4_dir_entry_2['file_type'] == 0:
+                offset=offset+8
+                i=i+8
+                continue
+            if self.ext4_dir_entry_2['name_len'] == 0 and self.ext4_dir_entry_2['inode'] != 0:
+                offset=offset+0x08
+                i=i+0x08
+                continue
+            if self.ext4_dir_entry_2['rec_len'] > 263 and self.ext4_dir_entry_2['name_len']==0:
+                offset=offset+0x08
+                i=i+0x08
+                continue
+            if self.ext4_dir_entry_2['inode'] > self.maxinode:
+                offset=offset+4
+                i=i+4
+                continue
+            if dirent_sz==0:
+                break                
+            if self.ext4_dir_entry_2['rec_len']!=0 and self.ext4_dir_entry_2['name_len']!=0:
+               self.ext4_parse_linear_dir_entry_info(offset)
+               offset=offset+dirent_sz
+            i=i+dirent_sz     
      
     def ext4_parse_linear_dir_entry_info(self,offset):
         self.ext4_dir_entry_2['inode']=int.from_bytes(self.f[offset:offset+0x04], byteorder='little')
@@ -1775,7 +1880,7 @@ class Ext4Parser:
         
     def ext4_parse_direntry_internal(self,offset):
         rec_len=0
-        if self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'] != 0: #check for hashed entries
+        if (self.ext4_inode['i_flags'] & EXT4_INODE_FLAGS['EXT4_INDEX_FL'])&1 == 1: #check for hashed entries
             self.dx_root['dot_inode']=int.from_bytes(self.f[offset:offset+0x04], byteorder='little')
             # print(f"Inode: {self.dx_root['dot_inode']}")
             self.dx_root['dot_rec_len']=int.from_bytes(self.f[offset+0x04:offset+0x06],byteorder='little')
@@ -1827,8 +1932,17 @@ class Ext4Parser:
             self.ext4_dir_entry_2['file_type']=int.from_bytes(self.f[offset+0x07:offset+0x08],byteorder='little')
             # print(f"File Type: {self.ext4_dir_entry_2['file_type']}")
             offset=offset+0x08
+            rec_len=self.ext4_dir_entry_2['name_len']+0x08
+            for i in range(4, rec_len, 4):
+                if i < rec_len and i+4 >= rec_len:
+                    rec_len=i+4
+                    break
+                    # print(f"Name: {self.ext4_dir_entry_2['name']}")
+            try:
+                self.ext4_dir_entry_2['name'] = self.f[offset:offset+self.ext4_dir_entry_2['name_len']].decode('utf-8')
+            except:
+                self.ext4_dir_entry_2['name'] = self.f[offset:offset+self.ext4_dir_entry_2['name_len']].hex()
             return rec_len
-            
         
 def ext4parser(filepath):
     ext4 = Ext4Parser(filepath)
