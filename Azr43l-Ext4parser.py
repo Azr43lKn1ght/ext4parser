@@ -1316,6 +1316,8 @@ class Ext4Parser:
                         diroff=log_offset[i]
                         break
                 offset=offset+0x08
+                if self.dx_entry['hash']==0:
+                    continue
                 self.ext4_parse_linear_dir_entry_info(diroff)
         elif self.dx_root['indirect_levels']==1:
             for i in range(0, valid_ent, 1):
@@ -1341,6 +1343,8 @@ class Ext4Parser:
                                 if log_number[i]==self.dx_entry['block']:
                                     dir2=log_offset[i]
                                     break
+                            if self.dx_entry['hash']==0:
+                                continue
                             self.ext4_parse_linear_dir_entry_info(dir2)
                             diroff=diroff+0x08
                 offset=offset+0x08
@@ -1378,6 +1382,8 @@ class Ext4Parser:
                                             if log_number[i]==self.dx_entry['block']:
                                                 dir3=log_offset[i]
                                                 break
+                                        if self.dx_entry['hash']==0:
+                                            continue
                                         self.ext4_parse_linear_dir_entry_info(dir3)
                                         diroff2=diroff2+0x08
                             diroff=diroff+0x08
@@ -1427,6 +1433,8 @@ class Ext4Parser:
                                                         if log_number[i]==self.dx_entry['block']:
                                                             dir4=log_offset[i]
                                                             break
+                                                    if self.dx_entry['hash']==0:
+                                                        continue
                                                     self.ext4_parse_linear_dir_entry_info(dir4)
                                                     diroff3=diroff3+0x08
                                         diroff2=diroff2+0x08
